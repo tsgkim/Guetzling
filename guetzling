@@ -1,126 +1,121 @@
 #!/bin/bash
-#Guetzling V 1.0.0
-help() { echo -e "
-$(basename $0), Version 1.0.0
 
-Usage example: $(basename $0) -q 90 -j -f ~/photos/output
+help() {
+    echo -e "
+    example: $(basename $0) -q 90 -f /photos/output
 
-    -q <84-100>, Sets the Quality, Default is 95
-    -j Recompress ONLY JPG (by default it will also recompress PNG)
-    -p Recompress ONLY PNG (by default it will also recompress JPG)
-    -k Keep the original PNG after conversion (by default it will not)
-    -f <folder> Speficify a folder of images to recompress, including subfolders (right now it's $(pwd)) 
-  " 1>&2; exit 1; }
+        -q <84-100>, 设置压缩级别, 默认95
+        -s, 设置最小压缩大小 k 级别
+        -f, 当前目录以及子目录文件中的图片将会压缩 (当前目录: $(pwd))
+    "
 
-#Set Quality level for JPG recompression
-#Default = 95
-#Max = 100
-#Min = 84
-QUALITY_JPG=95
+    exit
+}
 
 #Set Quality level
 #Default = 95
 #Max = 100
 #Min = 84
-QUALITY_PNG=95
 
-#Recompress JPG Images
-#Set to false to disable
-JPG=true
+# 设置 压缩度
+QUALITY=95
 
-#Convert PNG Images
-#Set to false to disable
-#PNGS WILL BE DELETED AFTER CONVERSION UNLESS OTHERWISE SPECIFIED
-PNG=true
+# 设置 最小压缩文件大小
+mineSize=50
+realMineSize=$[mineSize*1024]
 
-#Remove original PNGS after conversion to JPG
-PNG_DELETE=true
-
-#Set the operating folder to pwd
+# 设置 压缩的文件夹
 FOLDER=$(pwd)
 
-while getopts ":q:j:p:k:f:" o; do
+while getopts "q:s:f:" o; do
     case "${o}" in
         q)
-            q=${OPTARG}
-            if ((q >= 84 || q <= 100))
+            if [ ${OPTARG} -ge 84 ] && [ ${OPTARG} -le 100 ];
+            #if ((${OPTARG} >= 84 && ${OPTARG} <= 100))
             then
-                QUALITY_JPG=${q}
-                echo "QUALITY_JPG = ${QUALITY_JPG}"
+                echo
+                q=${OPTARG}
+                QUALITY=${OPTARG}
+                echo "QUALITY = ${OPTARG}"
+                echo
             else
                 help
             fi
             ;;
-        j)
-            j=${OPTARG}
-            PNG=false
-            echo "Recompressing JPG ONLY"
+
+        s)
+            s=${OPTARG}
+            mineSize=${OPTARG}
+            realMineSize=$[mineSize*1024]
+            echo "最小压缩大小: ${OPTARG} k"
+            echo
             ;;
-        p)
-            p=${OPTARG}
-            JPG=false
-            echo "Recompressing PNG ONLY"
-            ;;
-        k)
-            k=${OPTARG}
-            PNG_DELETE=false
-            echo "Keeping PNG after compression"
-            ;;
+
         f)
             f=${OPTARG}
-            FOLDER=${f}
-            echo "Working in folder ${f}, including subfolders"
+            FOLDER=${OPTARG}
+            echo "当前目录 ${OPTARG} 以及子目录文件中的图片将会压缩......"
+            echo
             ;;
+
         *)
             help
             ;;
     esac
 done
-shift $((OPTIND-1))
 
-#if [ -z "${q}" ] || [ -z "${j}" ]; then
-#    help
-#fi
-
-
+# 直接输入 guetzling 进行提示用法
+if [ -z "${q}" ] && [ -z "${s}" ] && [ -z "${f}" ];
+then
+    help
+fi
 
 IFS=$'\n';
 
-if [ $JPG = true ];
-    then
-        for f in $(find "$FOLDER" -name '*.jpg')
-        #for f in $1/*.jpg
-        do
-	        echo "Guetzling file - $f at level '$QUALITY_JPG'..."
-	        guetzli --quality "$QUALITY_JPG" "$f" "$f"
-	        echo "Done."
-        done
-fi
+for f in $(find "$FOLDER" -name '*.jpg')
+do
+    oldSize=`ls -lh $f | awk '{print $5}'`
+    oldFilename=`ls -lh $f | awk '{print $9}'`;
 
-if [ $JPG = true ];
-    then
-        for f in $(find "$FOLDER" -name '*.jpeg')
-        #for f in $1/*.jpeg
-        do
-            echo "Guetzling file - $f at level '$QUALITY_JPG'..."
-            guetzli --quality "$QUALITY_JPG" "$f" "$f"
-            echo "Done."
-        done
-fi
+    size=`wc -c < $f`
 
-if [ $PNG = true ];
+    if [ $size -ge $realMineSize ];
     then
-        for f in $(find "$FOLDER" -name '*.png')
-        #for f in $1/*.png
-        do
-	        echo "Guetzling file - $f at level '$QUALITY_PNG' ..."
-	        guetzli --quality "$QUALITY_PNG" "$f" "${f%.png}.jpg"
-            
-            if [ $PNG_DELETE = true ];
-                then
-                    rm "$f"
-            fi
-	        
-            echo "Done."
-        done
-fi
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  正在压缩  ---> $oldFilename  $oldSize"
+
+        guetzli --quality "$QUALITY" "$f" "$f"
+
+        newSize=`ls -lh $f | awk '{print $5}'`
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  压缩成功! ---> $oldFilename  $newSize"
+        echo
+    else
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  文件小于 $mineSize k, 取消压缩 ---> $oldFilename  $oldSize"
+        echo
+    fi
+done
+
+for f in $(find "$FOLDER" -name '*.jpeg')
+do
+    oldSize=`ls -lh $f | awk '{print $5}'`
+    oldFilename=`ls -lh $f | awk '{print $9}'`;
+    size=`wc -c < $f`
+
+    if [ $size -ge $realMineSize ];
+    then
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  正在压缩  ---> $oldFilename  $oldSize"
+
+        guetzli --quality "$QUALITY" "$f" "$f"
+
+        newSize=`ls -lh $f | awk '{print $5}'`
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  压缩成功! ---> $oldFilename  $newSize"
+        echo
+    else
+        now_time=`date '+%Y年%m月%d日 %H:%M:%S'`
+        echo "$now_time  文件小于 $mineSize k, 取消压缩 ---> $oldFilename  $oldSize"
+        echo
+    fi
